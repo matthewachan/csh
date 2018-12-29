@@ -1,11 +1,16 @@
-CC=gcc
-CFLAGS=-Wall -g
+CC = gcc
+CFLAGS = -Wall -g -I.
 
-EXE=w4118_sh
+EXE = w4118_sh
+DEPS = queue.h
+OBJ = $(EXE).o queue.o
 
-$(EXE): $(EXE).c
-	$(CC) $(EXE).c -o $(EXE) $(CFLAGS)
+%.o: %.c $(DEPS)
+	$(CC) -c -o $@ $< $(CFLAGS)
+
+$(EXE): $(OBJ)
+	$(CC) -o $@ $^ $(CFLAGS)
 
 .PHONY: clean
 clean:
-	rm -rf *.o w4118_sh *.dSYM
+	rm -rf *.o $(EXE) queue *.dSYM

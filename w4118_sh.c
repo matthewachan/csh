@@ -1,9 +1,11 @@
+#include "queue.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
 #define MAX_ARGS 10
+#define MAX_HISTORY 100
 
 /* Split up an input string by space delimiters. Each token of this string
  * will form the array of arguments which we will pass to the exec syscall.
@@ -30,6 +32,8 @@ int main(int argc, char **argv)
 {
 	int ntokens;
 	ssize_t nread;
+	struct queue history;
+	
 	int nused = 0;
 	char **buf = malloc(MAX_ARGS * sizeof(char *));
 	char *input = NULL;
@@ -48,6 +52,8 @@ int main(int argc, char **argv)
 		}
 		/* Remove newline ending */
 		input[nread - 1] = '\0';
+
+		
 
 		ntokens = tokenize(buf, input);
 		if (ntokens > nused)
