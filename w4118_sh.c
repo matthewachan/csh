@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include <unistd.h>
 
 #define MAX_ARGS 10
@@ -16,8 +17,7 @@
 /* Split up an input string by space delimiters. Each token of this string
  * will form the array of arguments which we will pass to the exec syscall.
  */
-int tokenize(char **buf, char *input)
-{
+int tokenize(char **buf, char *input) {
 	int retval;
 	char *token = strtok(input, " ");
 
@@ -35,24 +35,53 @@ int tokenize(char **buf, char *input)
 	return retval;
 }
 
-void print_history(struct queue *q, int ncmds)
+int isnum(char *c)
 {
+	for (int i = 0; i < (int)strlen(c); ++i) {
+		LOG("Checking if %c is a digit\n", c[i]);
+		if (isdigit(c[i]) == 0) {
+			LOG("%c is not a digit - returning false\n", c[i]);
+			return 0;
+		} else
+			LOG("Found valid digit %c\n", c[i]);
+	}
+
+	return 1;
+}
+
+void print_history(struct queue *q, int ncmds, int offset)
+{
+	if (offset > MAX_HISTORY)
+		offset = MAX_HISTORY;
+
 	int start;
-	int it = q->front;
-	/* printf("%s\n", q->elements[ncmds]); */
-	if (ncmds <= MAX_HISTORY)
+	if (ncmds <= offset)
 		start = 0;
 	else 
-		start = ncmds - MAX_HISTORY;
+		start = ncmds - offset;
 
+	int it = q->back;
+	int cntr = 0;
+	while (cntr < offset - 1) {
+		--it;
+		if (it < 0)
+			it = q->capacity - 1;
+		++cntr;
+	}
+
+	LOG("Printing last %d entries of history, starting at %d\n", offset, start);
+	cntr = 0;
 	while (it != q->back && it != q->capacity) {
 		printf("%d %s\n", start++, q->elements[it++]);
+		++cntr;
 	}
 
 	if (q->back < q->front) {
 		it = 0;
-		while (it != q->back)
+		while (it != q->back && cntr != offset) {
 			printf("%d %s\n", start++, q->elements[it++]);
+			++cntr;
+		}
 	} 
 
 	printf("%d %s\n", start++, q->elements[it]);
@@ -109,7 +138,19 @@ int main(int argc, char **argv)
 			free(input);
 			continue;
 		} else if (strcmp(buf[0], "history") == 0) {
-			print_history(&history, ncmds);
+			if (ntokens == 2 && strcmp(buf[1], "-c") == 0) {
+				cleanup(&history);
+				history.elements = malloc(MAX_HISTORY * sizeof(char *));
+				history.front = 0;
+				history.back = -1;
+				history.size = 0;
+				ncmds = 0;
+			} else if (ntokens == 2 && isnum(buf[1])) {
+				print_history(&history, ncmds, atoi(buf[1]));
+			}
+			else
+				print_history(&history, ncmds, MAX_HISTORY);
+
 			free(*input);
 			free(input);
 			continue;
