@@ -5,6 +5,9 @@
 
 #define MAX_ARGS 10
 
+/* Split up an input string by space delimiters. Each token of this string
+ * will form the array of arguments which we will pass to the exec syscall.
+ */
 void tokenize(char **buf, char *input)
 {
 	char *token = strtok(input, " ");
@@ -32,12 +35,14 @@ int main(int argc, char **argv)
 	while (1) {
 		printf("$");
 		nread = getline(&input, &len, std_in);
-		printf("%zu", len);
-		input[nread - 1] = '\0';
 
+		/* Remove newline ending */
+		input[nread - 1] = '\0';
 		tokenize(buf, input);
 
-		execv(buf[0], buf);
+		if (fork() == 0)
+			execv(buf[0], buf);
+		wait(NULL);
 	}
 
 	free(input);
