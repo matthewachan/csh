@@ -35,10 +35,12 @@ int main(int argc, char **argv)
 	while (1) {
 		printf("$");
 		nread = getline(&input, &len, std_in);
-
 		/* Remove newline ending */
 		input[nread - 1] = '\0';
+
 		tokenize(buf, input);
+		if (strcmp(buf[0], "exit") == 0 && nread == 5)
+			break;
 
 		if (fork() == 0)
 			execv(buf[0], buf);
