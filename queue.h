@@ -13,5 +13,6 @@ void insert(char *c, struct queue *q);
 void pop(struct queue *q);
 void push(char *c, struct queue *q);
 void print(struct queue *q);
+void cleanup(struct queue *q);
 
 #endif

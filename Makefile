@@ -5,6 +5,11 @@ EXE = w4118_sh
 DEPS = queue.h
 OBJ = $(EXE).o queue.o
 
+all: $(EXE)
+
+debug: CFLAGS += -DDEBUG
+debug: $(EXE)
+
 %.o: %.c $(DEPS)
 	$(CC) -c -o $@ $< $(CFLAGS)
 

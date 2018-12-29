@@ -15,7 +15,7 @@ void insert(char *c, struct queue *q)
 
 void pop(struct queue *q)
 {
-	q->elements[q->front++] = ""; 
+	free(q->elements[q->front++]);
 	if (q->front == q->capacity)
 		q->front = 0;
 	--q->size;
@@ -51,7 +51,25 @@ void print(struct queue *q)
 	printf("%s\n", q->elements[it]);
 }
 
-#ifdef DEBUG
+void cleanup(struct queue *q)
+{
+	int it = q->front;
+
+	while (it != q->back && it != q->capacity) {
+		free(q->elements[it++]);
+	}
+
+	if (q->back < q->front) {
+		it = 0;
+		while (it != q->back)
+			free(q->elements[it++]);
+	} 
+
+	free(q->elements[it]);
+	free(q->elements);
+}
+
+#ifdef DEBUG2
 int main(int argc, char **argv)
 {
 	struct queue q = {
@@ -69,6 +87,8 @@ int main(int argc, char **argv)
 
 	printf("front/back: %d/%d\n", q.front, q.back);
 	print(&q);
+
+	cleanup(&q);
 
 	return 0;
 }
