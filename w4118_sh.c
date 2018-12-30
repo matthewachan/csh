@@ -20,55 +20,69 @@ int fd[2];
 # define LOG(fmt, ...) do {} while (0)
 #endif
 
-/* Split up an input string by space delimiters. Each token of this string
- * will form the array of arguments which we will pass to the exec syscall.
- *
- * Returns the number of arguments found.
- */
-int tokenize(char **buf, char *input)
+int isnum(char *c)
 {
-	int retval;
-	char *token = strtok(input, " ");
-
-	int cntr = 0;
-
-	while (token && cntr < MAX_ARGS) {
-		buf[cntr++] = token;
-		token = strtok(NULL, " ");
+	for (int i = 0; i < (int)strlen(c); ++i) {
+		LOG("Checking if %c is a digit\n", c[i]);
+		if (isdigit(c[i]) == 0) {
+			LOG("%c is not a digit - returning false\n", c[i]);
+			return 0;
+		} else
+			LOG("Found valid digit %c\n", c[i]);
 	}
-	retval = cntr;
 
-	while (cntr < MAX_ARGS)
-		buf[cntr++] = NULL;
-
-	return retval;
+	return 1;
 }
 
-pid_t exec_cmd(char **buf, char *input, int arg_type)
+int parse_cmd(char **buf, char *input)
 {
 	char* savearg;
 	char *token = strtok_r(input, " ", &savearg);
 
-	int cntr = 0;
+	int nargs = 0;
 
-	while (token && cntr < MAX_ARGS) {
-		buf[cntr++] = token;
+	while (token && nargs < MAX_ARGS) {
+		buf[nargs++] = token;
 		token = strtok_r(NULL, " ", &savearg);
 	}
 
-	if (cntr < MAX_ARGS)
-		buf[cntr++] = NULL;
-	
+	if (nargs < MAX_ARGS)
+		buf[nargs] = NULL;
 
+	return nargs;
+}
+
+int isbuiltin(char **buf, int nargs)
+{
+	if (strcmp(buf[0], "exit") == 0 && nargs == 1)
+		return 1;
+	else if (strcmp(buf[0], "cd") == 0 && nargs == 2)
+		return 1;
+	else if (strcmp(buf[0], "history") == 0) {
+		if (nargs == 2 && strcmp(buf[1], "-c") == 0)
+			return 1;
+		else if (nargs == 2 && isnum(buf[1]))
+			return 1;
+	} else if (strcmp(buf[0], "!!") == 0 && nargs == 1)
+		return 1;
+	else if (buf[0][0] == '!' && nargs == 1)
+		return 1;
+
+	return 0;
+}
+
+pid_t exec_cmd(char **buf, int nargs, int arg_type)
+{
 	pid_t pid = fork();
 	if (pid != 0)
 		LOG("Forked PID %d\n", pid);
 
 	if (pid == 0) {
 		LOG("Executing %s with arguments:\n", buf[0]);
-		for (int i = 0; i < cntr; ++i) {
+		for (int i = 0; i <= nargs; ++i) {
 			LOG("\tArgument %d is %s\n", i, buf[i]);
 		}
+
 		if (arg_type != FIRST_ARG) {
 			LOG("\t%s\n", "Calling dup2 on stdin");
 			dup2(fd[0], 0);
@@ -93,6 +107,8 @@ int tokenize_cmd(char **buf, char *input)
 	char *savecmd;
 	int status;
 	pid_t pid;
+	int nargs;
+	int builtin;
 
 	pipe(fd);
 	char *token = strtok_r(input, "|", &savecmd);
@@ -107,44 +123,52 @@ int tokenize_cmd(char **buf, char *input)
 		token = strtok_r(NULL, "|", &savecmd);
 		++cntr;
 
-		if (cntr == 1) {
-			exec_cmd(buf, temp, FIRST_ARG);
-			LOG("%s\n", "Waiting...");
-			wait(NULL);
-			LOG("%s\n", "Finished waiting...");
+		nargs = parse_cmd(buf, temp);
+		builtin = isbuiltin(buf, nargs);
+		if (builtin)
+			LOG("%s\n", "Built-in function detected");
+		else
+			LOG("%s\n", "Command detected");
+		
+
+		/* Final command (or first command if there is no pipe) */
+		if (token == NULL) {
+			if (!builtin)
+				pid = exec_cmd(buf, nargs, LAST_ARG);
 		}
-		else if (token == NULL)
-			pid = exec_cmd(buf, temp, LAST_ARG);
+		/* First command, assuming there is at least one pipe */
+		else if (cntr == 1) {
+			if (!builtin) {
+				exec_cmd(buf, nargs, FIRST_ARG);
+				LOG("%s\n", "Waiting...");
+				wait(NULL);
+				LOG("%s\n", "Finished waiting...");
+			}
+		}
+		/* Any command that is not the first or the last of the piped
+		 * commands will get here */
 		else {
-			exec_cmd(buf, temp, NORM_ARG);
-			LOG("%s\n", "Waiting...");
-			wait(NULL);
-			LOG("%s\n", "Finished waiting...");
+			if (!builtin) {
+				exec_cmd(buf, nargs, NORM_ARG);
+				LOG("%s\n", "Waiting...");
+				wait(NULL);
+				LOG("%s\n", "Finished waiting...");
+			}
 		}
 	}
 
 	close(fd[0]);
 	close(fd[1]);
-	LOG("Waiting on PID: %d\n", pid);
-	waitpid(pid, &status, 0);
-	LOG("Finished waiting on PID %d (exit status: %d)\n", pid, status);
+
+	if (!builtin) {
+		LOG("Waiting on PID: %d\n", pid);
+		waitpid(pid, &status, 0);
+		LOG("Finished waiting on PID %d (exit status: %d)\n", pid, status);
+	}
 
 	return cntr;
 }
 
-int isnum(char *c)
-{
-	for (int i = 0; i < (int)strlen(c); ++i) {
-		LOG("Checking if %c is a digit\n", c[i]);
-		if (isdigit(c[i]) == 0) {
-			LOG("%c is not a digit - returning false\n", c[i]);
-			return 0;
-		} else
-			LOG("Found valid digit %c\n", c[i]);
-	}
-
-	return 1;
-}
 
 void print_history(struct queue *q, int ncmds, int offset)
 {
@@ -186,7 +210,6 @@ void print_history(struct queue *q, int ncmds, int offset)
 
 int main(int argc, char **argv)
 {
-	int ntokens;
 	ssize_t nread;
 	int ncmds = 0;
 	struct queue history = {
@@ -209,22 +232,20 @@ int main(int argc, char **argv)
 		*input = NULL;
 
 		printf("$");
-		
+
 		if ((nread = getline(input, &len, std_in)) == -1) {
 			perror("getline");
 			exit(EXIT_FAILURE);
 		}
 		/* Remove newline ending */
 		(*input)[nread - 1] = '\0';
-		
+
 		char *temp = malloc(sizeof(char) * nread);
 		strcpy(temp, *input);
 		push(temp, &history);
 		++ncmds;
 
 		tokenize_cmd(buf, *input);
-
-		/* ntokens = tokenize(buf, *input); */
 
 		/* if (strcmp(buf[0], "exit") == 0 && ntokens == 1) { */
 		/* 	free(*input); */
