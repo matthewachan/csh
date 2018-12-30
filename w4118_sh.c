@@ -19,7 +19,7 @@
 # define LOG(fmt, ...) do {\
 	fprintf(stderr, "DEBUG: ");\
 	fprintf(stderr, fmt, __VA_ARGS__);\
-  } while (0)
+} while (0)
 #else
 # define LOG(fmt, ...) do {} while (0)
 #endif
@@ -136,11 +136,16 @@ int exec_builtin(char **buf, int nargs)
 	else if (strcmp(buf[0], "cd") == 0 && nargs == 2)
 		chdir(buf[1]);
 	else if (strcmp(buf[0], "history") == 0) {
-		if (nargs == 2 && strcmp(buf[1], "-c") == 0)
-			return -1;
+		if (nargs == 2 && strcmp(buf[1], "-c") == 0) {
+			cleanup(&history);
+			history.elements = malloc(MAX_HISTORY * sizeof(char *));
+			history.front = 0;
+			history.back = -1;
+			history.size = 0;
+			ncmds = 0;
+		}
 		else if (nargs == 2 && isnum(buf[1]))
-			return -1;
-			/* print_history(&history, ncmds, atoi(buf[1])); */
+			print_history(&history, ncmds, atoi(buf[1]));
 		else if (nargs == 1)
 			print_history(&history, ncmds, MAX_HISTORY);
 	} else if (strcmp(buf[0], "!!") == 0 && nargs == 1)
@@ -209,7 +214,7 @@ int tokenize_cmd(char **buf, char *input)
 			LOG("%s\n", "Built-in function detected");
 		else
 			LOG("%s\n", "Command detected");
-		
+
 
 		/* Final command (or first command if there is no pipe) */
 		if (token == NULL) {
@@ -254,8 +259,6 @@ int tokenize_cmd(char **buf, char *input)
 	return 0;
 }
 
-
-
 int main(int argc, char **argv)
 {
 	int status;
@@ -299,50 +302,6 @@ int main(int argc, char **argv)
 
 		if (status == -1)
 			break;
-
-
-		/* if (strcmp(buf[0], "exit") == 0 && ntokens == 1) { */
-		/* 	free(*input); */
-		/* 	free(input); */
-		/* 	break; */
-		/* } */
-		/* else if (strcmp(buf[0], "cd") == 0 && ntokens == 2) { */
-		/* 	chdir(buf[1]); */
-		/* 	free(*input); */
-		/* 	free(input); */
-		/* 	continue; */
-		/* } else if (strcmp(buf[0], "history") == 0) { */
-		/* 	if (ntokens == 2 && strcmp(buf[1], "-c") == 0) { */
-		/* 		cleanup(&history); */
-		/* 		history.elements = malloc(MAX_HISTORY * sizeof(char *)); */
-		/* 		history.front = 0; */
-		/* 		history.back = -1; */
-		/* 		history.size = 0; */
-		/* 		ncmds = 0; */
-		/* 	} else if (ntokens == 2 && isnum(buf[1])) { */
-		/* 		print_history(&history, ncmds, atoi(buf[1])); */
-		/* 	} */
-		/* 	else */
-		/* 		print_history(&history, ncmds, MAX_HISTORY); */
-
-		/* 	free(*input); */
-		/* 	free(input); */
-		/* 	continue; */
-		/* } */
-
-		/* if (fork() == 0) { */
-		/* 	execv(buf[0], buf); */
-		/* 	LOG("%s\n", "Exec failed. Cleaning up memory..."); */
-		/* 	free(*input); */
-		/* 	free(input); */
-		/* 	cleanup(&history); */
-		/* 	free(buf); */
-		/* 	fclose(std_in); */
-		/* 	return -1; */
-
-		/* } */
-		/* wait(NULL); */
-
 	}
 
 	cleanup(&history);
