@@ -56,7 +56,7 @@ pid_t exec_cmd(char **buf, char *input, int arg_type)
 		token = strtok_r(NULL, " ", &savearg);
 	}
 
-	while (cntr < MAX_ARGS)
+	if (cntr < MAX_ARGS)
 		buf[cntr++] = NULL;
 	
 
@@ -65,13 +65,16 @@ pid_t exec_cmd(char **buf, char *input, int arg_type)
 		LOG("Forked PID %d\n", pid);
 
 	if (pid == 0) {
-		LOG("Executing %s\n", buf[0]);
+		LOG("Executing %s with arguments:\n", buf[0]);
+		for (int i = 0; i < cntr; ++i) {
+			LOG("\tArgument %d is %s\n", i, buf[i]);
+		}
 		if (arg_type != FIRST_ARG) {
-			LOG("%s\n", "Calling dup2 on stdin");
+			LOG("\t%s\n", "Calling dup2 on stdin");
 			dup2(fd[0], 0);
 		}
 		if (arg_type != LAST_ARG) {
-			LOG("%s\n", "Calling dup2 on stdout");
+			LOG("\t%s\n", "Calling dup2 on stdout");
 			dup2(fd[1], 1);
 		}
 		close(fd[0]);
@@ -88,8 +91,10 @@ pid_t exec_cmd(char **buf, char *input, int arg_type)
 int tokenize_cmd(char **buf, char *input) 
 {
 	char *savecmd;
+	int status;
 	pid_t pid;
 
+	pipe(fd);
 	char *token = strtok_r(input, "|", &savecmd);
 	int cntr = 0;
 
@@ -102,20 +107,27 @@ int tokenize_cmd(char **buf, char *input)
 		token = strtok_r(NULL, "|", &savecmd);
 		++cntr;
 
-		if (cntr == 1)
+		if (cntr == 1) {
 			exec_cmd(buf, temp, FIRST_ARG);
+			LOG("%s\n", "Waiting...");
+			wait(NULL);
+			LOG("%s\n", "Finished waiting...");
+		}
 		else if (token == NULL)
 			pid = exec_cmd(buf, temp, LAST_ARG);
-		else
+		else {
 			exec_cmd(buf, temp, NORM_ARG);
+			LOG("%s\n", "Waiting...");
+			wait(NULL);
+			LOG("%s\n", "Finished waiting...");
+		}
 	}
 
 	close(fd[0]);
 	close(fd[1]);
 	LOG("Waiting on PID: %d\n", pid);
-	waitpid(pid, NULL, 0);
-	wait(NULL);
-	LOG("Finished waiting on PID: %d\n", pid);
+	waitpid(pid, &status, 0);
+	LOG("Finished waiting on PID %d (exit status: %d)\n", pid, status);
 
 	return cntr;
 }
@@ -188,7 +200,6 @@ int main(int argc, char **argv)
 	char **input;
 	size_t len = 0;
 	FILE *std_in = fdopen(0, "r");
-	pipe(fd);
 
 	if (std_in == NULL)
 		exit(EXIT_FAILURE);
