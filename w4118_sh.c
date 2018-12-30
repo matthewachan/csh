@@ -16,13 +16,61 @@
  * with the debug flag enabled
  */
 #ifdef DEBUG
-# define LOG(fmt, ...) fprintf(stderr, fmt, __VA_ARGS__)
+# define LOG(fmt, ...) do {\
+	fprintf(stderr, "DEBUG: ");\
+	fprintf(stderr, fmt, __VA_ARGS__);\
+  } while (0)
 #else
 # define LOG(fmt, ...) do {} while (0)
 #endif
 
 int fd[2];
+int ncmds;
+struct queue history;
 
+
+void print_history(struct queue *q, int ncmds, int offset)
+{
+	LOG("Queue back/front is %d/%d\n", q->back, q->front);
+	if (offset > MAX_HISTORY)
+		offset = MAX_HISTORY;
+
+	int start;
+	int it;
+	int cntr;
+	if (ncmds <= offset) {
+		start = 0;
+		it = q->front;
+	}
+	else {
+		start = ncmds - offset;
+		it = q->back;
+		cntr = 0;
+		while (cntr < offset - 1) {
+			--it;
+			if (it < 0)
+				it = q->capacity - 1;
+			++cntr;
+		}
+	}
+
+	LOG("Printing last %d entries of history, starting at %d\n", offset, start);
+	cntr = 0;
+	while (it != q->back && it != q->capacity) {
+		printf("%d %s\n", start++, q->elements[it++]);
+		++cntr;
+	}
+
+	if (q->back < q->front) {
+		it = 0;
+		while (it != q->back && cntr != offset) {
+			printf("%d %s\n", start++, q->elements[it++]);
+			++cntr;
+		}
+	} 
+
+	printf("%d %s\n", start++, q->elements[it]);
+}
 int isnum(char *c)
 {
 	for (int i = 0; i < (int)strlen(c); ++i) {
@@ -66,6 +114,8 @@ int isbuiltin(char **buf, int nargs)
 			return 1;
 		else if (nargs == 2 && isnum(buf[1]))
 			return 1;
+		else if (nargs ==1)
+			return 1;
 	} else if (strcmp(buf[0], "!!") == 0 && nargs == 1)
 		return 1;
 	else if (buf[0][0] == '!' && nargs == 1)
@@ -76,7 +126,7 @@ int isbuiltin(char **buf, int nargs)
 
 int exec_builtin(char **buf, int nargs)
 {
-	LOG("Executing built-in function %s with arguments:\n", buf[0]);
+	LOG("Executing built-in function %s:\n", buf[0]);
 	for (int i = 0; i <= nargs; ++i) {
 		LOG("\tArgument %d is %s\n", i, buf[i]);
 	}
@@ -90,6 +140,9 @@ int exec_builtin(char **buf, int nargs)
 			return -1;
 		else if (nargs == 2 && isnum(buf[1]))
 			return -1;
+			/* print_history(&history, ncmds, atoi(buf[1])); */
+		else if (nargs == 1)
+			print_history(&history, ncmds, MAX_HISTORY);
 	} else if (strcmp(buf[0], "!!") == 0 && nargs == 1)
 		return -1;
 	else if (buf[0][0] == '!' && nargs == 1)
@@ -105,7 +158,7 @@ pid_t exec_cmd(char **buf, int nargs, int arg_type)
 		LOG("Forked PID %d\n", pid);
 
 	if (pid == 0) {
-		LOG("Executing %s with arguments:\n", buf[0]);
+		LOG("Executing %s:\n", buf[0]);
 		for (int i = 0; i <= nargs; ++i) {
 			LOG("\tArgument %d is %s\n", i, buf[i]);
 		}
@@ -142,7 +195,7 @@ int tokenize_cmd(char **buf, char *input)
 	int cntr = 0;
 
 	while (token) {
-		LOG("Command entered: %s\n", token);
+		LOG("Current command being processed is %s\n", token);
 
 		char temp[strlen(token)];
 		strcpy(temp, token);
@@ -193,7 +246,7 @@ int tokenize_cmd(char **buf, char *input)
 	close(fd[1]);
 
 	if (!builtin) {
-		LOG("Waiting on PID: %d\n", pid);
+		LOG("Waiting on PID %d\n", pid);
 		waitpid(pid, &status, 0);
 		LOG("Finished waiting on PID %d (exit status: %d)\n", pid, status);
 	}
@@ -202,60 +255,21 @@ int tokenize_cmd(char **buf, char *input)
 }
 
 
-void print_history(struct queue *q, int ncmds, int offset)
-{
-	if (offset > MAX_HISTORY)
-		offset = MAX_HISTORY;
-
-	int start;
-	if (ncmds <= offset)
-		start = 0;
-	else 
-		start = ncmds - offset;
-
-	int it = q->back;
-	int cntr = 0;
-	while (cntr < offset - 1) {
-		--it;
-		if (it < 0)
-			it = q->capacity - 1;
-		++cntr;
-	}
-
-	LOG("Printing last %d entries of history, starting at %d\n", offset, start);
-	cntr = 0;
-	while (it != q->back && it != q->capacity) {
-		printf("%d %s\n", start++, q->elements[it++]);
-		++cntr;
-	}
-
-	if (q->back < q->front) {
-		it = 0;
-		while (it != q->back && cntr != offset) {
-			printf("%d %s\n", start++, q->elements[it++]);
-			++cntr;
-		}
-	} 
-
-	printf("%d %s\n", start++, q->elements[it]);
-}
 
 int main(int argc, char **argv)
 {
 	int status;
 	ssize_t nread;
-	int ncmds = 0;
-	struct queue history = {
-		.front = 0,
-		.back = -1,
-		.capacity = MAX_HISTORY,
-		.size = 0,
-		.elements = malloc(MAX_HISTORY * sizeof(char *))
-	};
 	char **buf = malloc(MAX_ARGS * sizeof(char *));
 	char **input;
 	size_t len = 0;
 	FILE *std_in = fdopen(0, "r");
+	ncmds = 0;
+	history.front = 0;
+	history.back = -1;
+	history.capacity = MAX_HISTORY;
+	history.size = 0;
+	history.elements = malloc(MAX_HISTORY * sizeof(char *));
 
 	if (std_in == NULL)
 		exit(EXIT_FAILURE);
@@ -275,6 +289,7 @@ int main(int argc, char **argv)
 
 		char *temp = malloc(sizeof(char) * nread);
 		strcpy(temp, *input);
+		LOG("Adding entry (%s) to history\n", temp);
 		push(temp, &history);
 		++ncmds;
 
