@@ -12,13 +12,16 @@
 #define NORM_ARG 1
 #define LAST_ARG 2
 
-int fd[2];
-
+/* Logs will only be printed if the program is compiled
+ * with the debug flag enabled
+ */
 #ifdef DEBUG
 # define LOG(fmt, ...) fprintf(stderr, fmt, __VA_ARGS__)
 #else
 # define LOG(fmt, ...) do {} while (0)
 #endif
+
+int fd[2];
 
 int isnum(char *c)
 {
@@ -67,6 +70,30 @@ int isbuiltin(char **buf, int nargs)
 		return 1;
 	else if (buf[0][0] == '!' && nargs == 1)
 		return 1;
+
+	return 0;
+}
+
+int exec_builtin(char **buf, int nargs)
+{
+	LOG("Executing built-in function %s with arguments:\n", buf[0]);
+	for (int i = 0; i <= nargs; ++i) {
+		LOG("\tArgument %d is %s\n", i, buf[i]);
+	}
+
+	if (strcmp(buf[0], "exit") == 0 && nargs == 1)
+		return -1;
+	else if (strcmp(buf[0], "cd") == 0 && nargs == 2)
+		chdir(buf[1]);
+	else if (strcmp(buf[0], "history") == 0) {
+		if (nargs == 2 && strcmp(buf[1], "-c") == 0)
+			return -1;
+		else if (nargs == 2 && isnum(buf[1]))
+			return -1;
+	} else if (strcmp(buf[0], "!!") == 0 && nargs == 1)
+		return -1;
+	else if (buf[0][0] == '!' && nargs == 1)
+		return -1;
 
 	return 0;
 }
@@ -135,6 +162,10 @@ int tokenize_cmd(char **buf, char *input)
 		if (token == NULL) {
 			if (!builtin)
 				pid = exec_cmd(buf, nargs, LAST_ARG);
+			else {
+				if (exec_builtin(buf, nargs) == -1)
+					return -1;
+			}
 		}
 		/* First command, assuming there is at least one pipe */
 		else if (cntr == 1) {
@@ -146,7 +177,8 @@ int tokenize_cmd(char **buf, char *input)
 			}
 		}
 		/* Any command that is not the first or the last of the piped
-		 * commands will get here */
+		 * commands will get here 
+		 */
 		else {
 			if (!builtin) {
 				exec_cmd(buf, nargs, NORM_ARG);
@@ -166,7 +198,7 @@ int tokenize_cmd(char **buf, char *input)
 		LOG("Finished waiting on PID %d (exit status: %d)\n", pid, status);
 	}
 
-	return cntr;
+	return 0;
 }
 
 
@@ -210,6 +242,7 @@ void print_history(struct queue *q, int ncmds, int offset)
 
 int main(int argc, char **argv)
 {
+	int status;
 	ssize_t nread;
 	int ncmds = 0;
 	struct queue history = {
@@ -245,7 +278,13 @@ int main(int argc, char **argv)
 		push(temp, &history);
 		++ncmds;
 
-		tokenize_cmd(buf, *input);
+		status = tokenize_cmd(buf, *input);
+		free(*input);
+		free(input);
+
+		if (status == -1)
+			break;
+
 
 		/* if (strcmp(buf[0], "exit") == 0 && ntokens == 1) { */
 		/* 	free(*input); */
@@ -289,8 +328,6 @@ int main(int argc, char **argv)
 		/* } */
 		/* wait(NULL); */
 
-		free(*input);
-		free(input);
 	}
 
 	cleanup(&history);
