@@ -124,6 +124,18 @@ int isbuiltin(char **buf, int nargs)
 	return 0;
 }
 
+int issubstr(char *pattern, char *s)
+{
+	if (strlen(pattern) > strlen(s))
+		return 0;
+
+	for (int i = 0; i < strlen(pattern); ++i) {
+		if (pattern[i] != s[i])
+			return 0;
+	}
+	return 1;
+}
+
 int exec_builtin(char **buf, int nargs)
 {
 	LOG("Executing built-in function %s:\n", buf[0]);
@@ -148,10 +160,63 @@ int exec_builtin(char **buf, int nargs)
 			print_history(&history, ncmds, atoi(buf[1]));
 		else if (nargs == 1)
 			print_history(&history, ncmds, MAX_HISTORY);
-	} else if (strcmp(buf[0], "!!") == 0 && nargs == 1)
-		return -1;
-	else if (buf[0][0] == '!' && nargs == 1)
-		return -1;
+	} else if (strcmp(buf[0], "!!") == 0 && nargs == 1) {
+		/* Remove !! from history is no last command is found */
+		if (ncmds < 2) {
+			printf("!! - event not found\n");
+			free(history.elements[--ncmds]);
+			history.back = -1;
+			history.size = 0;
+		} else {
+			char *lastcmd = history.elements[ncmds - 2];
+			LOG("Most recent command in history is %s\n", lastcmd);
+
+			/* Replace !! in history with the last command */
+			free(history.elements[ncmds - 1]);
+			char *temp = malloc(strlen(lastcmd) * sizeof(char) + 1);
+			strcpy(temp, lastcmd);
+			history.elements[ncmds - 1] = temp;
+		}
+	}
+	else if (buf[0][0] == '!' && nargs == 1) {
+		char pattern[strlen(buf[0])];
+		memset(pattern, '\0', sizeof(pattern));
+		memcpy(pattern, &buf[0][1], strlen(buf[0]) - 1);
+		LOG("Searching for pattern %s\n", pattern);
+
+		int found = 0;
+		int it = history.back;
+		while (it != history.front && !found) {
+			if (issubstr(pattern, history.elements[it])) {
+				found = 1;
+				break;
+			}
+
+			--it;
+			if (it < 0) {
+				break;
+			}
+		}
+		if (history.front > history.back && !found) {
+			it = history.capacity - 1;
+			while (it != history.front) {
+				--it;
+			}
+		}
+
+		if (!found) {
+			printf("! - event not found\n");
+			free(history.elements[--ncmds]);
+			if (history.back == -1 && ncmds > history.size)
+				history.back = history.capacity - 1;
+			else
+				history.back -= 1;
+			history.size -= 1;
+		} else {
+			LOG("Found pattern %s in %s\n", pattern, history.elements[it]);
+		}
+
+	}
 
 	return 0;
 }
@@ -284,7 +349,7 @@ int main(int argc, char **argv)
 		printf("$");
 
 		if ((nread = getline(input, &len, std_in)) == -1) {
-			perror("getline");
+			perror("Failure on getline");
 			exit(EXIT_FAILURE);
 		}
 		/* Remove newline ending */
