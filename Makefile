@@ -1,8 +1,11 @@
+INCLUDE_DIR = include
+SRC_DIR = src
+
 CC = gcc
-CFLAGS = -Wall -g -I.
+CFLAGS = -Wall -g -Iinclude
 
 EXE = w4118_sh
-DEPS = queue.h
+DEPS = $(INCLUDE_DIR)/queue.h
 OBJ = $(EXE).o queue.o
 
 all: $(EXE)
@@ -10,7 +13,7 @@ all: $(EXE)
 debug: CFLAGS += -DDEBUG
 debug: $(EXE)
 
-%.o: %.c $(DEPS)
+%.o: $(SRC_DIR)/%.c $(DEPS)
 	$(CC) -c -o $@ $< $(CFLAGS)
 
 $(EXE): $(OBJ)
