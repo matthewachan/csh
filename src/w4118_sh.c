@@ -1,4 +1,5 @@
 #include "queue.h"
+#include "w4118_sh.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -184,14 +185,23 @@ int exec_builtin(char **buf, int nargs, int arg_type)
 			history.back = -1;
 			history.size = 0;
 		} else {
-			char *lastcmd = history.elements[ncmds - 2];
+			char *lastcmd;
+			if (history.back == 0)
+				lastcmd = history.elements[history.capacity - 1];
+			else 
+				lastcmd = history.elements[history.back - 1];
+
 			LOG("Most recent command in history is %s\n", lastcmd);
 
 			/* Replace !! in history with the last command */
-			free(history.elements[ncmds - 1]);
+			free(history.elements[history.back]);
 			char *temp = malloc(strlen(lastcmd) * sizeof(char) + 1);
 			strcpy(temp, lastcmd);
-			history.elements[ncmds - 1] = temp;
+			history.elements[history.back] = temp;
+			char *temp2 = malloc(strlen(lastcmd) * sizeof(char) + 1);
+			strcpy(temp2, lastcmd);
+			tokenize_cmd(buf, lastcmd);
+			free(temp2);
 		}
 	} else if (buf[0][0] == '!' && nargs == 1) {
 		char pattern[strlen(buf[0])];
