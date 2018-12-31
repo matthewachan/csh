@@ -11,6 +11,7 @@
 #define FIRST_ARG 0
 #define NORM_ARG 1
 #define LAST_ARG 2
+#define ONLY_ARG 3
 
 /* Logs will only be printed if the program is compiled
  * with the debug flag enabled
@@ -29,7 +30,7 @@ int ncmds;
 struct queue history;
 
 
-void print_history(struct queue *q, int ncmds, int offset)
+void print_history(int file_desc, struct queue *q, int ncmds, int offset)
 {
 	LOG("Queue back/front is %d/%d\n", q->back, q->front);
 	if (offset > MAX_HISTORY)
@@ -57,19 +58,19 @@ void print_history(struct queue *q, int ncmds, int offset)
 	LOG("Printing last %d entries of history, starting at %d\n", offset, start);
 	cntr = 0;
 	while (it != q->back && it != q->capacity) {
-		printf("%d %s\n", start++, q->elements[it++]);
+		dprintf(file_desc, "%d %s\n", start++, q->elements[it++]);
 		++cntr;
 	}
 
 	if (q->back < q->front) {
 		it = 0;
 		while (it != q->back && cntr != offset) {
-			printf("%d %s\n", start++, q->elements[it++]);
+			dprintf(file_desc, "%d %s\n", start++, q->elements[it++]);
 			++cntr;
 		}
 	} 
 
-	printf("%d %s\n", start++, q->elements[it]);
+	dprintf(file_desc, "%d %s\n", start++, q->elements[it]);
 }
 int isnum(char *c)
 {
@@ -136,30 +137,45 @@ int issubstr(char *pattern, char *s)
 	return 1;
 }
 
-int exec_builtin(char **buf, int nargs)
+int exec_builtin(char **buf, int nargs, int arg_type)
 {
 	LOG("Executing built-in function %s:\n", buf[0]);
 	for (int i = 0; i <= nargs; ++i) {
 		LOG("\tArgument %d is %s\n", i, buf[i]);
 	}
 
-	if (strcmp(buf[0], "exit") == 0 && nargs == 1)
-		return -1;
-	else if (strcmp(buf[0], "cd") == 0 && nargs == 2)
-		chdir(buf[1]);
+	if (strcmp(buf[0], "exit") == 0 && nargs == 1) {
+		if (arg_type == ONLY_ARG)
+			return -1;
+	}
+	else if (strcmp(buf[0], "cd") == 0 && nargs == 2) {
+		if (arg_type == ONLY_ARG)
+			chdir(buf[1]);
+	}
 	else if (strcmp(buf[0], "history") == 0) {
 		if (nargs == 2 && strcmp(buf[1], "-c") == 0) {
-			cleanup(&history);
-			history.elements = malloc(MAX_HISTORY * sizeof(char *));
-			history.front = 0;
-			history.back = -1;
-			history.size = 0;
-			ncmds = 0;
+			if (arg_type == ONLY_ARG) {
+				cleanup(&history);
+				history.elements = malloc(MAX_HISTORY * sizeof(char *));
+				history.front = 0;
+				history.back = -1;
+				history.size = 0;
+				ncmds = 0;
+			}
 		}
-		else if (nargs == 2 && isnum(buf[1]))
-			print_history(&history, ncmds, atoi(buf[1]));
-		else if (nargs == 1)
-			print_history(&history, ncmds, MAX_HISTORY);
+		else if (nargs == 2 && isnum(buf[1])) {
+			if (arg_type == ONLY_ARG || arg_type == LAST_ARG)
+				print_history(STDOUT_FILENO, &history, ncmds, atoi(buf[1]));
+			else
+				print_history(fd[1], &history, ncmds, atoi(buf[1]));
+
+		}
+		else if (nargs == 1) {
+			if (arg_type == ONLY_ARG || arg_type == LAST_ARG)
+				print_history(STDOUT_FILENO, &history, ncmds, MAX_HISTORY);
+			else
+				print_history(fd[1], &history, ncmds, MAX_HISTORY);
+		}
 	} else if (strcmp(buf[0], "!!") == 0 && nargs == 1) {
 		/* Remove !! from history is no last command is found */
 		if (ncmds < 2) {
@@ -177,8 +193,7 @@ int exec_builtin(char **buf, int nargs)
 			strcpy(temp, lastcmd);
 			history.elements[ncmds - 1] = temp;
 		}
-	}
-	else if (buf[0][0] == '!' && nargs == 1) {
+	} else if (buf[0][0] == '!' && nargs == 1) {
 		char pattern[strlen(buf[0])];
 		memset(pattern, '\0', sizeof(pattern));
 		memcpy(pattern, &buf[0][1], strlen(buf[0]) - 1);
@@ -233,11 +248,11 @@ pid_t exec_cmd(char **buf, int nargs, int arg_type)
 			LOG("\tArgument %d is %s\n", i, buf[i]);
 		}
 
-		if (arg_type != FIRST_ARG) {
+		if (arg_type != FIRST_ARG && arg_type != ONLY_ARG) {
 			LOG("\t%s\n", "Calling dup2 on stdin");
 			dup2(fd[0], 0);
 		}
-		if (arg_type != LAST_ARG) {
+		if (arg_type != LAST_ARG && arg_type != ONLY_ARG) {
 			LOG("\t%s\n", "Calling dup2 on stdout");
 			dup2(fd[1], 1);
 		}
@@ -281,12 +296,23 @@ int tokenize_cmd(char **buf, char *input)
 			LOG("%s\n", "Command detected");
 
 
-		/* Final command (or first command if there is no pipe) */
-		if (token == NULL) {
+		/* Single command (no pipes) */
+		if (token == NULL && cntr == 1) {
+			LOG("%s\n", "No pipes detected");
+			if (!builtin)
+				pid = exec_cmd(buf, nargs, ONLY_ARG);
+			else {
+				if (exec_builtin(buf, nargs, ONLY_ARG) == -1)
+					return -1;
+			}
+
+		}
+		/* Final command */
+		else if (token == NULL) {
 			if (!builtin)
 				pid = exec_cmd(buf, nargs, LAST_ARG);
 			else {
-				if (exec_builtin(buf, nargs) == -1)
+				if (exec_builtin(buf, nargs, LAST_ARG) == -1)
 					return -1;
 			}
 		}
@@ -297,6 +323,8 @@ int tokenize_cmd(char **buf, char *input)
 				LOG("%s\n", "Waiting...");
 				wait(NULL);
 				LOG("%s\n", "Finished waiting...");
+			} else {
+				exec_builtin(buf, nargs, FIRST_ARG);
 			}
 		}
 		/* Any command that is not the first or the last of the piped
