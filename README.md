@@ -4,9 +4,9 @@
 csh (**don't worry** I know csh already exists) is an interactive shell program. While its functionality is quite simple compared to fully-implemented shells like bash, csh still retains many of the core features that developers expect their shell to implement. 
 
 I'll mention a few of these features here:
-- Built-in functions like `cd`, `history`, bang / bang bang, and `exit` are supported
-- Executables can be run in csh with up to 10 arguments (if you need more just modify the MAX\_ARGS parameter in src/csh.c)
-- Piping between commands is also supported with no limit on the number of pipes you can use, so you can do all sorts of crazy stuff
+- Built-in functions like `cd`, `history`, `!` / `!!`, and `exit` are supported
+- Executables can be run in csh with up to 10 arguments (if you need more just modify the `MAX_ARGS` parameter in src/csh.c)
+- Piping between commands is also supported with no upper limit on the number of pipes you can use, so you can do all sorts of crazy stuff
 
 ![](etc/screencap.gif)
 
