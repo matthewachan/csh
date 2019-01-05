@@ -5,6 +5,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <unistd.h>
+#include <errno.h>
 
 #define MAX_ARGS 10
 #define MAX_HISTORY 100
@@ -160,6 +161,10 @@ int exec_builtin(char **buf, int nargs, int arg_type)
 			if (arg_type == ONLY_ARG) {
 				cleanup(&history);
 				history.elements = malloc(MAX_HISTORY * sizeof(char *));
+				if (!history.elements) {
+					fprintf(stderr, "error: %s\n", strerror(errno));
+					return -1;
+				}
 				history.front = 0;
 				history.back = -1;
 				history.size = 0;
@@ -198,12 +203,15 @@ int exec_builtin(char **buf, int nargs, int arg_type)
 			/* Replace !! in history with the last command */
 			free(history.elements[history.back]);
 			char *temp = malloc(strlen(lastcmd) * sizeof(char) + 1);
+			if (!temp) {
+				fprintf(stderr, "error: %s\n", strerror(errno));
+				return -1;
+			}
 			strcpy(temp, lastcmd);
 			history.elements[history.back] = temp;
-			char *temp2 = malloc(strlen(lastcmd) * sizeof(char) + 1);
+			char temp2[strlen(lastcmd) * sizeof(char) + 1];
 			strcpy(temp2, lastcmd);
 			tokenize_cmd(buf, lastcmd);
-			free(temp2);
 		}
 	} else if (buf[0][0] == '!' && nargs == 1) {
 		char pattern[strlen(buf[0])];
@@ -367,14 +375,12 @@ int tokenize_cmd(char **buf, char *input)
 int has_match(char *pattern, char *str)
 {
 	LOG("Comparing %s to %s\n", pattern, str);
-	char *substr = malloc(sizeof(char) * strlen(pattern) + 1);
+	char substr[strlen(pattern) + 1];
 	strncpy(substr, str, strlen(pattern));
 	memset(substr + strlen(pattern), '\0', sizeof(char));
 	if (strcmp(substr, pattern) == 0) {
-		free(substr);
 		return 1;
 	}
-	free(substr);
 	return 0;
 }
 
@@ -387,6 +393,10 @@ char *parse_input(char *input)
 		}
 			
 		char *cmd = malloc(sizeof(char) * strlen(input) + 1);
+		if (!cmd) {
+			fprintf(stderr, "error: %s\n", strerror(errno));
+			exit(EXIT_FAILURE);
+		}
 		strcpy(cmd, input);
 
 		char *pch = strstr(cmd, "!!");
@@ -395,22 +405,25 @@ char *parse_input(char *input)
 		LOG("Most recent command in history is %s\n", lastcmd);
 		
 		while (pch != NULL) {
-			char *tail = malloc(sizeof(char) * strlen(pch + 2) + 1);
+			char tail[strlen(pch + 2) + 1];
 			strcpy(tail, pch + 2);
 			printf("tail: %s\n", tail);
 
 			char *temp = malloc(sizeof(char) * (strlen(cmd) - 2 + strlen(lastcmd)) + 1);
+			if (!temp) {
+				fprintf(stderr, "error: %s\n", strerror(errno));
+				exit(EXIT_FAILURE);
+			}
+
 			strcpy(temp, cmd);
 			strcpy(strstr(temp, "!!"), lastcmd);
 			strcat(temp, tail);
 			printf("result: %s (len: %lu)\n", temp, strlen(temp));
 
-			free(tail);	
 			free(cmd);
 			cmd = temp;
 			
 			pch = strstr(cmd, "!!");
-
 		}
 
 		return cmd;
@@ -421,6 +434,11 @@ char *parse_input(char *input)
 			return NULL;
 		}
 		char *cmd = malloc(sizeof(char) * strlen(input) + 1);
+		if (!cmd) {
+			fprintf(stderr, "error: %s\n", strerror(errno));
+			exit(EXIT_FAILURE);
+		}
+
 		strcpy(cmd, input);
 
 		/* Identify pattern */
@@ -431,7 +449,7 @@ char *parse_input(char *input)
 			while(*space != ' ' && strlen(space) != 0)
 				++space;
 			size_t len = strlen(pch) - strlen(space);
-			char *fullpattern = malloc(sizeof(char) * len + 1);
+			char fullpattern[len + 1];
 			strncpy(fullpattern, pch, len);
 			memset(fullpattern + len, '\0', sizeof(char));
 			char *pattern = fullpattern + 1;
@@ -468,23 +486,25 @@ char *parse_input(char *input)
 			}
 			else {
 				LOG("%s\n", "! - event not found");
-				free(fullpattern);
 				return NULL;
 			}
-			char *tail = malloc(sizeof(char) * strlen(pch + strlen(pattern)) + 1);
+			char tail[strlen(pch + strlen(pattern)) + 1];
 			strcpy(tail, pch + strlen(pattern) + 1);
 			printf("tail: %s\n", tail);
 
 			char *temp = malloc(sizeof(char) * (strlen(cmd) - (strlen(pattern) + 1) + strlen(matchingcmd)) + 1);
+			if (!temp) {
+				fprintf(stderr, "error: %s\n", strerror(errno));
+				exit(EXIT_FAILURE);
+			}
+
 			strcpy(temp, cmd);
 
 			strcpy(strstr(temp, fullpattern), matchingcmd);
 			strcat(temp, tail);
 			printf("result: %s (len: %lu)\n", temp, strlen(temp));
 
-			free(tail);	
 			free(cmd);
-			free(fullpattern);
 			cmd = temp;
 			
 			pch = strstr(cmd, "!");
@@ -493,6 +513,10 @@ char *parse_input(char *input)
 
 	}
 	char *output = malloc(sizeof(char) * (strlen(input) + 1));
+	if (!output) {
+		fprintf(stderr, "error: %s\n", strerror(errno));
+		exit(EXIT_FAILURE);
+	}
 	strcpy(output, input);
 	return output;
 }
@@ -512,18 +536,26 @@ int main(int argc, char **argv)
 	history.size = 0;
 	history.elements = malloc(MAX_HISTORY * sizeof(char *));
 
-	if (std_in == NULL)
-		exit(EXIT_FAILURE);
+	if (!buf || !history.elements || !std_in) {
+		fprintf(stderr, "error: %s\n", strerror(errno));
+		return -1;
+	}
 
 	while (1) {
 		input = malloc(sizeof(char *));
 		*input = NULL;
+		if (!input) {
+			fprintf(stderr, "error: %s\n", strerror(errno));
+			return -1;
+		}
 
 		printf("$");
 
 		if ((nread = getline(input, &len, std_in)) == -1) {
-			perror("Failure on getline");
-			exit(EXIT_FAILURE);
+			fprintf(stderr, "error: %s\n", strerror(errno));
+			free(*input);
+			free(input);
+			break;
 		}
 		/* Remove newline ending */
 		(*input)[nread - 1] = '\0';
@@ -535,6 +567,10 @@ int main(int argc, char **argv)
 			*input = output;
 
 			char *entry = malloc(sizeof(char) * (strlen(*input) + 1));
+			if (!entry) {
+				fprintf(stderr, "error: %s\n", strerror(errno));
+				return -1;
+			}
 			strcpy(entry, *input);
 			LOG("Adding entry (%s) to history\n", entry);
 			push(entry, &history);
