@@ -362,6 +362,139 @@ int tokenize_cmd(char **buf, char *input)
 	return 0;
 }
 
+int has_match(char *pattern, char *str)
+{
+	LOG("Comparing %s to %s\n", pattern, str);
+	char *substr = malloc(sizeof(char) * strlen(pattern) + 1);
+	strncpy(substr, str, strlen(pattern));
+	memset(substr + strlen(pattern), '\0', sizeof(char));
+	if (strcmp(substr, pattern) == 0) {
+		free(substr);
+		return 1;
+	}
+	free(substr);
+	return 0;
+}
+
+char *parse_input(char *input)
+{
+	if (strstr(input, "!!") != NULL) {
+		if (ncmds <= 0) {
+			LOG("%s\n", "!! - event not found");
+			return NULL;
+		}
+			
+		char *cmd = malloc(sizeof(char) * strlen(input) + 1);
+		strcpy(cmd, input);
+
+		char *pch = strstr(cmd, "!!");
+
+		char *lastcmd = history.elements[history.back];
+		LOG("Most recent command in history is %s\n", lastcmd);
+		
+		while (pch != NULL) {
+			char *tail = malloc(sizeof(char) * strlen(pch + 2) + 1);
+			strcpy(tail, pch + 2);
+			printf("tail: %s\n", tail);
+
+			char *temp = malloc(sizeof(char) * (strlen(cmd) - 2 + strlen(lastcmd)) + 1);
+			strcpy(temp, cmd);
+			strcpy(strstr(temp, "!!"), lastcmd);
+			strcat(temp, tail);
+			printf("result: %s (len: %lu)\n", temp, strlen(temp));
+
+			free(tail);	
+			free(cmd);
+			cmd = temp;
+			
+			pch = strstr(cmd, "!!");
+
+		}
+
+		return cmd;
+
+	} else if (strstr(input, "!") != NULL && strlen(strstr(input, "!")) > 1) {
+		if (ncmds <= 0) {
+			LOG("%s\n", "! - event not found");
+			return NULL;
+		}
+		char *cmd = malloc(sizeof(char) * strlen(input) + 1);
+		strcpy(cmd, input);
+
+		/* Identify pattern */
+		char *pch = strstr(cmd, "!");
+
+		while (pch != NULL) {
+			char *space = pch;
+			while(*space != ' ' && strlen(space) != 0)
+				++space;
+			size_t len = strlen(pch) - strlen(space);
+			char *fullpattern = malloc(sizeof(char) * len + 1);
+			strncpy(fullpattern, pch, len);
+			memset(fullpattern + len, '\0', sizeof(char));
+			char *pattern = fullpattern + 1;
+			LOG("Pattern is (%s)\n", pattern);
+
+			/* Search history for a matching command */
+			int cur = history.back;
+			int match = 0;
+			while (cur >= 0) {
+				match = has_match(pattern, history.elements[cur]);
+
+				if (match)
+					break;
+
+				--cur;
+			}
+
+			if (history.front > history.back && !match) {
+				cur = history.capacity - 1;
+				while (cur != history.front) {
+					match = has_match(pattern, history.elements[cur]);
+
+					if (match)
+						break;
+					--cur;
+				}
+			}
+
+			char *matchingcmd;
+
+			if (match) {
+				matchingcmd = history.elements[cur];
+				LOG("Matched %s with command is %s\n", pattern, matchingcmd);
+			}
+			else {
+				LOG("%s\n", "! - event not found");
+				free(fullpattern);
+				return NULL;
+			}
+			char *tail = malloc(sizeof(char) * strlen(pch + strlen(pattern)) + 1);
+			strcpy(tail, pch + strlen(pattern) + 1);
+			printf("tail: %s\n", tail);
+
+			char *temp = malloc(sizeof(char) * (strlen(cmd) - (strlen(pattern) + 1) + strlen(matchingcmd)) + 1);
+			strcpy(temp, cmd);
+
+			strcpy(strstr(temp, fullpattern), matchingcmd);
+			strcat(temp, tail);
+			printf("result: %s (len: %lu)\n", temp, strlen(temp));
+
+			free(tail);	
+			free(cmd);
+			free(fullpattern);
+			cmd = temp;
+			
+			pch = strstr(cmd, "!");
+		}
+		return cmd;
+
+	}
+	char *output = malloc(sizeof(char) * (strlen(input) + 1));
+	strcpy(output, input);
+	return output;
+}
+
 int main(int argc, char **argv)
 {
 	int status;
@@ -393,11 +526,18 @@ int main(int argc, char **argv)
 		/* Remove newline ending */
 		(*input)[nread - 1] = '\0';
 
-		char *temp = malloc(sizeof(char) * nread);
-		strcpy(temp, *input);
-		LOG("Adding entry (%s) to history\n", temp);
-		push(temp, &history);
-		++ncmds;
+		/* Parse input for !! or ! */
+		char *output = parse_input(*input);
+		if (output) {
+			free(*input);
+			*input = output;
+
+			char *entry = malloc(sizeof(char) * (strlen(*input) + 1));
+			strcpy(entry, *input);
+			LOG("Adding entry (%s) to history\n", entry);
+			push(entry, &history);
+			++ncmds;
+		}
 
 		status = tokenize_cmd(buf, *input);
 		free(*input);

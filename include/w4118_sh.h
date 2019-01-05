@@ -12,5 +12,7 @@ int issubstr(char *pattern, char *s);
 int exec_builtin(char **buf, int nargs, int arg_type);
 pid_t exec_cmd(char **buf, int nargs, int arg_type);
 int tokenize_cmd(char **buf, char *input);
+int has_match(char *pattern, char *str);
+char *parse_input(char *input);
 
 #endif
