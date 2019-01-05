@@ -283,7 +283,7 @@ pid_t exec_cmd(char **buf, int nargs, int arg_type)
 		close(fd[0]);
 		close(fd[1]);
 
-		if (execv(buf[0], buf) == -1) {
+		if (execvp(buf[0], buf) == -1) {
 			fprintf(stderr, "error: %s\n", strerror(errno));
 			exit(EXIT_FAILURE);
 		}
