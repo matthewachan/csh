@@ -7,7 +7,7 @@
 #include <unistd.h>
 
 #define MAX_ARGS 10
-#define MAX_HISTORY 3
+#define MAX_HISTORY 100
 
 #define FIRST_ARG 0
 #define NORM_ARG 1
@@ -36,16 +36,18 @@ void print_history(int file_desc, struct queue *q, int ncmds, int offset)
 	LOG("Queue back/front is %d/%d\n", q->back, q->front);
 	if (offset > MAX_HISTORY)
 		offset = MAX_HISTORY;
+	if (history.size < offset)
+		offset = history.size;
 
 	int start;
 	int it;
 	int cntr;
+
+	start = ncmds - offset;
 	if (ncmds <= offset) {
-		start = 0;
 		it = q->front;
 	}
 	else {
-		start = ncmds - offset;
 		it = q->back;
 		cntr = 0;
 		while (cntr < offset - 1) {
@@ -161,7 +163,7 @@ int exec_builtin(char **buf, int nargs, int arg_type)
 				history.front = 0;
 				history.back = -1;
 				history.size = 0;
-				ncmds = 0;
+				/* ncmds = 0; */
 			}
 		}
 		else if (nargs == 2 && isnum(buf[1])) {
