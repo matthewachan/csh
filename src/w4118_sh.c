@@ -283,8 +283,10 @@ pid_t exec_cmd(char **buf, int nargs, int arg_type)
 		close(fd[0]);
 		close(fd[1]);
 
-		execv(buf[0], buf);
-		LOG("%s\n", "Exec failed. Memory leak!");
+		if (execv(buf[0], buf) == -1) {
+			fprintf(stderr, "error: %s\n", strerror(errno));
+			exit(EXIT_FAILURE);
+		}
 	}
 
 	return pid;
@@ -416,7 +418,6 @@ char *parse_input(char *input)
 			char tail[strlen(pch + 2) + 1];
 
 			strcpy(tail, pch + 2);
-			printf("tail: %s\n", tail);
 
 			char *temp = malloc(strlen(cmd) - 2 +
 					strlen(lastcmd) + 1);
@@ -429,7 +430,7 @@ char *parse_input(char *input)
 			strcpy(temp, cmd);
 			strcpy(strstr(temp, "!!"), lastcmd);
 			strcat(temp, tail);
-			printf("result: %s (len: %lu)\n", temp, strlen(temp));
+			LOG("Result: %s (len: %lu)\n", temp, strlen(temp));
 
 			free(cmd);
 			cmd = temp;
@@ -440,7 +441,7 @@ char *parse_input(char *input)
 		return cmd;
 
 	} else if (strstr(input, "!") != NULL) {
-		if (ncmds <= 0 || strlen(strstr(input, "!")) > 1) {
+		if (ncmds <= 0 || strlen(strstr(input, "!")) < 1) {
 			LOG("%s\n", "! - event not found");
 			return NULL;
 		}
@@ -509,7 +510,6 @@ char *parse_input(char *input)
 			char tail[strlen(pch + strlen(pattern)) + 1];
 
 			strcpy(tail, pch + strlen(pattern) + 1);
-			printf("tail: %s\n", tail);
 
 			char *temp = malloc(strlen(cmd) - (strlen(pattern) + 1)
 					+ strlen(matchingcmd) + 1);
@@ -523,7 +523,7 @@ char *parse_input(char *input)
 
 			strcpy(strstr(temp, fullpattern), matchingcmd);
 			strcat(temp, tail);
-			printf("result: %s (len: %lu)\n", temp, strlen(temp));
+			LOG("Result: %s (len: %lu)\n", temp, strlen(temp));
 
 			free(cmd);
 			cmd = temp;
