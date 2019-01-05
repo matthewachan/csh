@@ -28,25 +28,22 @@ void push(char *c, struct queue *q)
 		printf("max capacity reached\n");
 		pop(q);
 		insert(c, q);
-	}
-	else {
+	} else
 		insert(c, q);
-	}
 }
 
 void print(struct queue *q)
 {
 	int it = q->front;
 
-	while (it != q->back && it != q->capacity) {
+	while (it != q->back && it != q->capacity)
 		printf("%s\n", q->elements[it++]);
-	}
 
 	if (q->back < q->front) {
 		it = 0;
 		while (it != q->back)
 			printf("%s\n", q->elements[it++]);
-	} 
+	}
 
 	printf("%s\n", q->elements[it]);
 }
@@ -55,15 +52,14 @@ void cleanup(struct queue *q)
 {
 	int it = q->front;
 
-	while (it != q->back && it != q->capacity) {
+	while (it != q->back && it != q->capacity)
 		free(q->elements[it++]);
-	}
 
 	if (q->back < q->front) {
 		it = 0;
 		while (it != q->back)
 			free(q->elements[it++]);
-	} 
+	}
 
 	free(q->elements[it]);
 	free(q->elements);
