@@ -546,7 +546,7 @@ int main(int argc, char **argv)
 {
 	int status;
 	ssize_t nread;
-	char **buf = malloc(MAX_ARGS);
+	char **buf = malloc(sizeof(char *) * MAX_ARGS);
 	char **input;
 	size_t len = 0;
 	FILE *std_in = fdopen(0, "r");
