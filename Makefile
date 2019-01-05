@@ -4,8 +4,8 @@ SRC_DIR = src
 CC = gcc
 CFLAGS = -Wall -g -Iinclude
 
-EXE = w4118_sh
-DEPS = $(INCLUDE_DIR)/queue.h $(INCLUDE_DIR)/w4118_sh.h
+EXE = csh
+DEPS = $(INCLUDE_DIR)/queue.h $(INCLUDE_DIR)/csh.h
 OBJ = $(EXE).o queue.o
 
 all: $(EXE)

@@ -5,7 +5,7 @@ import sys
 
 import pexpect
 
-SHELL = "../w4118_sh"
+SHELL = "../csh"
 
 
 class TesterPrinter(object):
